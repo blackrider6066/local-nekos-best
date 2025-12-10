@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json.schemastore.org/package",
+  "name": "local-nekos-best",
+  "version": "1.0.0",
+  "description": "Lightning fast access to nekos.best anime gifs and images. Zero API calls, no rate limits, instant responses.",
+  "license": "MIT",
+  "author": "blackrider6066",
+  "type": "module",
+  "private": false,
+  "sideEffects": false,
+  "files": [
+    "main/",
+    "types/",
+    "LICENSE",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blackrider6066/local-nekos-best.git"
+  },
+  "bugs": {
+    "url": "https://github.com/blackrider6066/local-nekos-best/issues"
+  },
+  "homepage": "https://github.com/blackrider6066/local-nekos-best#readme",
+  "main": "./main/main.mjs",
+  "types": "./types/main.d.mts",
+  "exports": {
+  ".": {
+    "types": {
+      "require": "./types/main.d.cts",
+      "import": "./types/main.d.mts",
+      "default": "./types/main.d.mts"
+    },
+    "require": "./main/main.cjs",
+    "import": "./main/main.mjs",
+    "default": "./main/main.mjs"
+  }
+},
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "keywords": [
+    "anime",
+    "gifs",
+    "nekos",
+    "reactions",
+    "local"
+  ]
+}
