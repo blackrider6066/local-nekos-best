@@ -1,7 +1,7 @@
 {
   "$schema": "http://json.schemastore.org/package",
   "name": "local-nekos-best",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lightning fast access to nekos.best anime gifs and images. Zero API calls, no rate limits, instant responses.",
   "license": "MIT",
   "author": "blackrider6066",
@@ -16,7 +16,8 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/blackrider6066/local-nekos-best.git"
+    "url": "git+https://github.com/blackrider6066/local-nekos-best.git",
+    "directory": "local-nekos-best"
   },
   "bugs": {
     "url": "https://github.com/blackrider6066/local-nekos-best/issues"
