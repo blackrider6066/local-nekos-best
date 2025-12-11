@@ -7,11 +7,15 @@ on:
       - 'local-nekos-best/**'
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: 'Dry run'
-        required: false
-        default: false
-        type: boolean
+      target:
+        description: 'Where to publish'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - npm
+          - github
+          - both
       force:
         description: 'Force publish'
         required: false
@@ -19,83 +23,70 @@ on:
         type: boolean
 
 jobs:
-  publish:
+  npm:
+    if: github.event_name == 'push' || inputs.target == 'npm' || inputs.target == 'both'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
       id-token: write
-    
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
 
-      - name: Check versions
+      - name: Check version
         id: ver
         working-directory: ./local-nekos-best
         run: |
           PKG=$(node -p "require('./package.json').name")
           LOCAL=$(node -p "require('./package.json').version")
-          
-          # Check npm registry
-          NPM_VER=$(npm view "$PKG" version 2>/dev/null || echo "0.0.0")
-          
-          # Check GitHub Packages registry
-          GH_VER=$(npm view "$PKG" version --registry=https://npm.pkg.github.com 2>/dev/null || echo "0.0.0")
-          
-          echo "Local: $LOCAL | npm: $NPM_VER | GitHub: $GH_VER"
-          
-          # Compare for npm
-          NPM_PUBLISH=$(node -e "
+          NPM=$(npm view "$PKG" version 2>/dev/null || echo "0.0.0")
+          echo "Local: $LOCAL | npm: $NPM"
+          PUBLISH=$(node -e "
             const l = '$LOCAL'.split('.').map(Number);
-            const n = '$NPM_VER'.split('.').map(Number);
-            const newer = l[0] > n[0] || (l[0] === n[0] && l[1] > n[1]) || (l[0] === n[0] && l[1] === n[1] && l[2] > n[2]);
-            console.log(newer ? 'true' : 'false');
+            const n = '$NPM'.split('.').map(Number);
+            console.log(l[0]>n[0]||(l[0]===n[0]&&l[1]>n[1])||(l[0]===n[0]&&l[1]===n[1]&&l[2]>n[2])?'true':'false');
           ")
-          
-          # Compare for GitHub
-          GH_PUBLISH=$(node -e "
-            const l = '$LOCAL'.split('.').map(Number);
-            const g = '$GH_VER'.split('.').map(Number);
-            const newer = l[0] > g[0] || (l[0] === g[0] && l[1] > g[1]) || (l[0] === g[0] && l[1] === g[1] && l[2] > g[2]);
-            console.log(newer ? 'true' : 'false');
-          ")
-          
-          echo "npm_publish=$NPM_PUBLISH" >> $GITHUB_OUTPUT
-          echo "gh_publish=$GH_PUBLISH" >> $GITHUB_OUTPUT
+          echo "publish=$PUBLISH" >> $GITHUB_OUTPUT
 
-      - name: Status
-        run: |
-          echo "Publish to npm: ${{ steps.ver.outputs.npm_publish }}"
-          echo "Publish to GitHub: ${{ steps.ver.outputs.gh_publish }}"
-
-      # Publish to npm
-      - name: Setup npm
-        if: steps.ver.outputs.npm_publish == 'true' || inputs.force
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Publish to npm
-        if: (steps.ver.outputs.npm_publish == 'true' || inputs.force) && !inputs.dry_run
+      - name: Publish
+        if: steps.ver.outputs.publish == 'true' || inputs.force
         working-directory: ./local-nekos-best
         run: npm publish --provenance --access public
 
-      # Publish to GitHub Packages
-      - name: Setup GitHub Packages
-        if: steps.ver.outputs.gh_publish == 'true' || inputs.force
-        uses: actions/setup-node@v4
+  github:
+    if: github.event_name == 'push' || inputs.target == 'github' || inputs.target == 'both'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '24'
           registry-url: 'https://npm.pkg.github.com'
 
-      - name: Publish to GitHub Packages
-        if: (steps.ver.outputs.gh_publish == 'true' || inputs.force) && !inputs.dry_run
+      - name: Check version
+        id: ver
+        working-directory: ./local-nekos-best
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          LOCAL=$(node -p "require('./package.json').version")
+          GH=$(npm view "$PKG" version --registry=https://npm.pkg.github.com 2>/dev/null || echo "0.0.0")
+          echo "Local: $LOCAL | GitHub: $GH"
+          PUBLISH=$(node -e "
+            const l = '$LOCAL'.split('.').map(Number);
+            const g = '$GH'.split('.').map(Number);
+            console.log(l[0]>g[0]||(l[0]===g[0]&&l[1]>g[1])||(l[0]===g[0]&&l[1]===g[1]&&l[2]>g[2])?'true':'false');
+          ")
+          echo "publish=$PUBLISH" >> $GITHUB_OUTPUT
+
+      - name: Publish
+        if: steps.ver.outputs.publish == 'true' || inputs.force
         working-directory: ./local-nekos-best
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Done
-        run: echo "Workflow complete"
