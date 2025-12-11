@@ -1,4 +1,4 @@
-name: Publish Package
+name: Publish to npm
 
 on:
   push:
@@ -7,15 +7,11 @@ on:
       - 'local-nekos-best/**'
   workflow_dispatch:
     inputs:
-      target:
-        description: 'Where to publish'
-        required: true
-        default: 'both'
-        type: choice
-        options:
-          - npm
-          - github
-          - both
+      dry_run:
+        description: 'Dry run'
+        required: false
+        default: false
+        type: boolean
       force:
         description: 'Force publish'
         required: false
@@ -23,15 +19,18 @@ on:
         type: boolean
 
 jobs:
-  npm:
-    if: github.event_name == 'push' || inputs.target == 'npm' || inputs.target == 'both'
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
@@ -43,50 +42,28 @@ jobs:
           PKG=$(node -p "require('./package.json').name")
           LOCAL=$(node -p "require('./package.json').version")
           NPM=$(npm view "$PKG" version 2>/dev/null || echo "0.0.0")
+          
           echo "Local: $LOCAL | npm: $NPM"
+          
           PUBLISH=$(node -e "
             const l = '$LOCAL'.split('.').map(Number);
             const n = '$NPM'.split('.').map(Number);
-            console.log(l[0]>n[0]||(l[0]===n[0]&&l[1]>n[1])||(l[0]===n[0]&&l[1]===n[1]&&l[2]>n[2])?'true':'false');
+            const newer = l[0] > n[0] || (l[0] === n[0] && l[1] > n[1]) || (l[0] === n[0] && l[1] === n[1] && l[2] > n[2]);
+            console.log(newer ? 'true' : 'false');
           ")
+          
           echo "publish=$PUBLISH" >> $GITHUB_OUTPUT
 
-      - name: Publish
+      - name: Pack
         if: steps.ver.outputs.publish == 'true' || inputs.force
+        working-directory: ./local-nekos-best
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: (steps.ver.outputs.publish == 'true' || inputs.force) && !inputs.dry_run
         working-directory: ./local-nekos-best
         run: npm publish --provenance --access public
 
-  github:
-    if: github.event_name == 'push' || inputs.target == 'github' || inputs.target == 'both'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          registry-url: 'https://npm.pkg.github.com'
-
-      - name: Check version
-        id: ver
-        working-directory: ./local-nekos-best
-        run: |
-          PKG=$(node -p "require('./package.json').name")
-          LOCAL=$(node -p "require('./package.json').version")
-          GH=$(npm view "$PKG" version --registry=https://npm.pkg.github.com 2>/dev/null || echo "0.0.0")
-          echo "Local: $LOCAL | GitHub: $GH"
-          PUBLISH=$(node -e "
-            const l = '$LOCAL'.split('.').map(Number);
-            const g = '$GH'.split('.').map(Number);
-            console.log(l[0]>g[0]||(l[0]===g[0]&&l[1]>g[1])||(l[0]===g[0]&&l[1]===g[1]&&l[2]>g[2])?'true':'false');
-          ")
-          echo "publish=$PUBLISH" >> $GITHUB_OUTPUT
-
-      - name: Publish
-        if: steps.ver.outputs.publish == 'true' || inputs.force
-        working-directory: ./local-nekos-best
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Skip
+        if: steps.ver.outputs.publish != 'true' && !inputs.force
+        run: echo "No version change skipped"
